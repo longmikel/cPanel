@@ -1,0 +1,15 @@
+#!/bin/bash
+GREEN='\e[32m'
+STD='\e[39m'
+if [ -z "$1" ]; then
+    echo Usage: $0 {Email}
+    exit 1
+fi
+
+Email=$1
+User="$(echo "${Email}" | cut -d'@' -f1)"
+Domain="$(echo "${Email}" | cut -d'@' -f2)"
+Account="$(cat /etc/userdomains | grep "${Domain}" | cut -d' ' -f2)"
+
+uapi --user=$Account Email store_filter filtername="Move Subject [SPAM] to Junk" account=$Email action1=save dest1=$home/mail/$Domain/$User/.Junk part1=\$header_subject: match1=matches val1="^\[SPAM]" opt1=or
+echo -e "${GREEN} $Email - Done ${STD}"

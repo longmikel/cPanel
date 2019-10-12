@@ -1,0 +1,41 @@
+#!/bin/sh
+for i in `/usr/local/cpanel/3rdparty/mailman/bin/list_lists -b`
+do
+
+# Check directory mailing list
+if [ -d /usr/local/cpanel/3rdparty/mailman/archives/private/$i ]; then
+        rm -rf /usr/local/cpanel/3rdparty/mailman/archives/private/$i/*
+        echo -e "--- Mailing list $i does exist ---"
+else
+        echo -e "--- Mailing list $i does not exist ---"
+fi
+
+# Check file mailing list MBOX
+if [ -f /usr/local/cpanel/3rdparty/mailman/archives/private/$i'.mbox'/$i'.mbox' ]; then
+        echo -e "--- Mailing list MBOX $i exist ---"
+        echo "" > /usr/local/cpanel/3rdparty/mailman/archives/private/$i'.mbox'/$i'.mbox'
+else
+        echo -e "--- Mailing list MBOX $i does exist ---"
+        touch /usr/local/cpanel/3rdparty/mailman/archives/private/$i'.mbox'/$i'.mbox'
+        chown -R mailman.mailman /usr/local/cpanel/3rdparty/mailman/archives/private/$i'.mbox'/$i'.mbox'
+fi
+echo -e "--- Done ---"
+
+# Refresh mailing list
+echo "Preparing to refresh mailing list $i, please wait..."
+/usr/local/cpanel/3rdparty/mailman/bin/arch --wipe $i
+echo -e "--- Done ---"
+
+# Permission mailing list
+echo "Preparing to change owner and mod of mailing list $i, please wait..."
+        chown -R mailman.mailman /usr/local/cpanel/3rdparty/mailman/archives/private/$i
+        chown mailman.nobody /usr/local/cpanel/3rdparty/mailman/archives/private/$i
+        chmod 710 /usr/local/cpanel/3rdparty/mailman/archives/private/$i
+echo -e "--- Done ---"
+
+# Update mailman cache
+echo "Preparing to update mailman cache, please wait..."
+/scripts/update_mailman_cache
+echo -e "--- Done ---"
+done
+exit 0

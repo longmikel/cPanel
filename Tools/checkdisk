@@ -1,0 +1,20 @@
+#/bin/bash
+
+# Get current disk usage
+DiskUsage=`df / | awk 'NR==2 {printf("%d %d %d %d",$2,$3,$4,$5)}'`
+
+# Retrieve each element
+Size=`echo $DiskUsage | awk '{print $1}'`
+Used=`echo $DiskUsage | awk '{print $2}'`
+Avail=`echo $DiskUsage | awk '{print $3}'`
+UsedPercent=`echo $DiskUsage | awk '{print $4}'`
+
+# Create JSON string
+echo "$DiskUsage $(( Size -  Used - Avail - UsedPercent))" | \
+awk \
+'{printf("{\
+\"DISK_TOTAL\":%d ,\
+\"DISK_USED\":%d ,\
+\"DISK_AVAIL\":%d ,\
+\"DISK_USED%\":%d}" ,\
+$1,$2,$3,$4)}'
