@@ -1,0 +1,23 @@
+#!/bin/bash
+cPanel=`netstat -tulpn | awk '{ print $7 }' | grep cpsrvd | wc -l`
+Exim=`netstat -tulpn | awk '{ print $7 }' | grep exim | wc -l`
+Dovecot=`netstat -tulpn | awk '{ print $7 }' | grep dovecot | wc -l`
+Nginx=`netstat -tulpn | awk '{ print $7 }' | grep nginx | wc -l`
+Apache=`netstat -tulpn | awk '{ print $7 }' | grep httpd | wc -l`
+Spamd=`netstat -tulpn | awk '{ print $7 }' | grep spamd | wc -l`
+Zabbix_Agent=`netstat -tulpn | awk '{ print $7 }' | grep zabbix_agentd | wc -l`
+Webmin=`netstat -tulpn | awk '{ print $7 }' | grep perl | wc -l`
+
+# Create JSON string for SERVICES
+echo "$cPanel - $Exim - $Dovecot - $Nginx - $Apache - $Spamd - $Zabbix_Agent - $Webmin"| \
+awk \
+'{printf("{\
+\"cPanel\":%d ,\
+\"Exim\":%d ,\
+\"Dovecot\":%d ,\
+\"Nginx\":%d ,\
+\"Apache\":%d ,\
+\"Spamd\":%d ,\
+\"Zabbix_Agent\":%d ,\
+\"Webmin\":%d}" ,\
+$1,$3,$5,$7,$9,$11,$13,$15)}'

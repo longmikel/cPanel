@@ -1,0 +1,31 @@
+#!/bin/bash
+if [ -f "/etc/redhat-release" ]; then
+        RAM=`free | awk 'NR==2 {printf("%d %d %d %d",$2,$4,$6,$7)}'`
+        SWAP=`free | grep "^Swap:" | awk '{printf("%d %d %d",$2,$3,$4)}'`
+elif [ -f "/etc/lsb-release" ]; then
+        RAM=`free -w | awk 'NR==2 {printf("%d %d %d %d",$2,$4,$6,$7)}'`
+        SWAP=`free | grep "^Swap:" | awk '{printf("%d %d %d",$2,$3,$4)}'`
+else
+        echo "Not supported distribution."
+fi
+
+# Retrieve each element for RAM
+RAM_Total=`echo $RAM | awk '{print $1}'`
+RAM_Free=`echo $RAM | awk '{print $2}'`
+RAM_Buff=`echo $RAM | awk '{print $3}'`
+RAM_Cached=`echo $RAM | awk '{print $4}'`
+SWAP_Total=`echo $SWAP | awk '{print $1}'`
+SWAP_Used=`echo $SWAP | awk '{print $2}'`
+SWAP_Free=`echo $SWAP | awk '{print $3}'`
+# Create JSON string for RAM
+echo "$RAM_Total - $RAM_Free - $RAM_Buff - $RAM_Cached - $SWAP_Total - $SWAP_Used - $SWAP_Free"| \
+awk \
+'{printf("{\
+\"RAM_TOTAL\":%d ,\
+\"RAM_FREE\":%d ,\
+\"RAM_BUFF\":%d ,\
+\"RAM_CACHED\":%d ,\
+\"SWAP_TOTAL\":%d ,\
+\"SWAP_USED\":%d ,\
+\"SWAP_FREE\":%d}" ,\
+$1,$3,$5,$7,$9,$11,$13)}'

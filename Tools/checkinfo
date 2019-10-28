@@ -1,0 +1,21 @@
+#!/bin/bash
+DOMAIN_TOTAL=$(find /var/cpanel/users ! -name "system" -type f -print | wc -l)
+DOMAIN_SUSPENDED=$(find /var/cpanel/suspended/ -type f -print | wc -l)
+MAILBOX=$(sed "s|:||g" /etc/userdomains | awk '!/^\* nobody/{print $1, $2 | "sort | uniq" }' | awk '{print "cat /home/"$2"/etc/"$1"/passwd"}' | sh 2>/dev/null | wc -l)
+QUEUE=$(exim -bpc)
+SESSION_SMTP=$(netstat -anpl | grep ':25\|:465' | wc -l)
+SESSION_IMAP=$(netstat -anpl | grep ':143\|:993' | wc -l)
+SESSION_POP=$(netstat -anpl | grep ':110\|:990' | wc -l)
+
+# Create JSON string
+echo "$DOMAIN_TOTAL - $DOMAIN_SUSPENDED - $MAILBOX - $QUEUE - $SESSION_SMTP - $SESSION_IMAP - $SESSION_POP"| \
+awk \
+'{printf("{\
+\"DOMAIN_TOTAL\":%d ,\
+\"DOMAIN_SUSPENDED\":%d ,\
+\"MAILBOX\":%d ,\
+\"QUEUE\":%d ,\
+\"SESSION_SMTP\":%d ,\
+\"SESSION_IMAP\":%d ,\
+\"SESSION_POP\":%d}" ,\
+$1,$3,$5,$7,$9,$11,$13)}'
