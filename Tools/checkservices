@@ -1,4 +1,7 @@
 #!/bin/bash
+HOSTNAME=$(hostname)
+NC=$(which nc)
+
 cPanel=`netstat -tulpn | awk '{ print $7 }' | grep cpsrvd | wc -l`
 Exim=`netstat -tulpn | awk '{ print $7 }' | grep exim | wc -l`
 Dovecot=`netstat -tulpn | awk '{ print $7 }' | grep dovecot | wc -l`
@@ -8,8 +11,64 @@ Spamd=`netstat -tulpn | awk '{ print $7 }' | grep spamd | wc -l`
 Zabbix_Agent=`netstat -tulpn | awk '{ print $7 }' | grep zabbix_agentd | wc -l`
 Webmin=`netstat -tulpn | awk '{ print $7 }' | grep perl | wc -l`
 
+# Check the status returned for SMTP with Port 25
+echo "QUIT"| $NC -w 5 $HOSTNAME 25 > /dev/null 2>&1
+if [ "$?" -ne "1" ]; then
+        SMTP_25=`echo 1`
+else
+        SMTP_25=`echo 0`
+fi
+
+# Check the status returned for SMTP with Port 465
+echo "QUIT"| $NC -w 5 $HOSTNAME 465 > /dev/null 2>&1
+if [ "$?" -ne "1" ]; then
+        SMTP_465=`echo 1`
+else
+        SMTP_465=`echo 0`
+fi
+
+# Check the status returned for SMTP with Port 587
+echo "QUIT"| $NC -w 5 $HOSTNAME 587 > /dev/null 2>&1
+if [ "$?" -ne "1" ]; then
+        SMTP_587=`echo 1`
+else
+        SMTP_587=`echo 0`
+fi
+
+#Check the status returned for IMAP with Port 143
+echo "QUIT"| $NC -w 5 $HOSTNAME 143 > /dev/null 2>&1
+if [ "$?" -ne "1" ]; then
+        IMAP_143=`echo 1`
+else
+        IMAP_143=`echo 0`
+fi
+
+#Check the status returned for IMAP with Port 993
+echo "QUIT"| $NC -w 5 $HOSTNAME 993 > /dev/null 2>&1
+if [ "$?" -ne "1" ]; then
+        IMAP_993=`echo 1`
+else
+        IMAP_993=`echo 0`
+fi
+
+#Check the status returned for POP with Port 110
+echo "QUIT"| $NC -w 5 $HOSTNAME 110 > /dev/null 2>&1
+if [ "$?" -ne "1" ]; then
+        POP_110=`echo 1`
+else
+        POP_110=`echo 0`
+fi
+
+#Check the status returned for POP with Port 995
+echo "QUIT"| $NC -w 5 $HOSTNAME 995 > /dev/null 2>&1
+if [ "$?" -ne "1" ]; then
+        POP_995=`echo 1`
+else
+        POP_995=`echo 0`
+fi
+
 # Create JSON string for SERVICES
-echo "$cPanel - $Exim - $Dovecot - $Nginx - $Apache - $Spamd - $Zabbix_Agent - $Webmin"| \
+echo "$cPanel - $Exim - $Dovecot - $Nginx - $Apache - $Spamd - $Zabbix_Agent - $Webmin - $SMTP_25 - $SMTP_465 - $SMTP_587 - $IMAP_143 - $IMAP_993 - $POP_110 - $POP_995"| \
 awk \
 '{printf("{\
 \"cPanel\":%d ,\
@@ -19,5 +78,12 @@ awk \
 \"Apache\":%d ,\
 \"Spamd\":%d ,\
 \"Zabbix_Agent\":%d ,\
-\"Webmin\":%d}" ,\
-$1,$3,$5,$7,$9,$11,$13,$15)}'
+\"Webmin\":%d ,\
+\"SMTP_25\":%d ,\
+\"SMTP_465\":%d ,\
+\"SMTP_587\":%d ,\
+\"IMAP_143\":%d ,\
+\"IMAP_993\":%d ,\
+\"POP_110\":%d ,\
+\"POP_995\":%d}" ,\
+$1,$3,$5,$7,$9,$11,$13,$15,$17,$19,$21,$23,$25,$27,$29)}'
