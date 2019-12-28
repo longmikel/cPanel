@@ -11,11 +11,11 @@ function spam {
     Domain="$(echo "${sender}" | cut -d'@' -f2)"
     Account="$(cat /etc/userdomains | grep "${Domain}" | cut -d' ' -f2)"
     i=`grep -E ^$domain /etc/localdomains | awk '{print $1}'`
-        if [ -z $i ]; then
-             exit 1
-        else [ $counter -ge 100 ]; then
+        if [ -n $i ]; then
+           if [ $counter -ge 100 ]; then
              echo "The address \"$sender\" on $(hostname) is attempting to send over 100 messages within 5 minutes. Amount: $counter" | mail -s "Spam Alert: $sender Spam On $(hostname)" longhm1@matbao.com
              uapi --user=$Account Email suspend_outgoing email=$sender
+           fi
         fi
     done
 }
