@@ -1,0 +1,140 @@
+#!/bin/bash
+
+# Set verbose to null
+verbose=""
+
+# Print the help text
+helptext () {
+    tput bold
+    tput setaf 2
+    echo "[cPanel]"
+    echo "USAGE: $0 [options]"
+    echo "Options:"
+    echo "  -h, --help  display this help and exit"
+    echo "  -all,       run on all email"
+    echo "  -a, --account specify account"
+    echo "  -e, --email         specify email"
+    echo "  -f, --file  list email from file"
+    echo "."
+    echo "."
+    echo "."
+    echo "- Fix dovecot 2 INBOX and update subscriptions"
+        tput bold
+        tput setaf 1
+        echo "- Only run 1 time!"
+    tput sgr0
+    exit 0
+}
+
+convert2utf8 () {
+        email=$1
+        user="$(echo "${email}" | cut -d'@' -f1)"
+        domain="$(echo "${email}" | cut -d'@' -f2)"
+        account="$(cat /etc/userdomains | grep "${domain}" | cut -d' ' -f2)"
+        DIR=/home/${account}/mail/${domain}/${user}
+
+        # Check email
+                if [ -d "${DIR}" ]
+                then
+                        echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> $email"
+                        cd ${DIR}
+                else
+                        echo -e "\e[1;31m\033[1mERROR: \033[0m${email} does not exists."
+                        exit 1
+                fi
+
+        # Rename and update
+        ls -1a | grep INBOX > subscriptions.fix
+        while read name; do
+                new_name="$(basename "${name}" | sed 's/.INBOX././g')"
+                echo -n "Rename $name"
+                echo " >>>>>>>>> $new_name"
+                if [ "${name}" != "${new_name}" ]; then
+                        [ ! -e "${new_name}" ] && mv -T "${name}" "${new_name}"; echo "${name} was renamed to ${new_name}" || echo "${name} wasn't renamed!"
+                fi
+                echo "."
+        done < subscriptions.fix
+        cp subscriptions{,.backup}
+        sed -i '/INBOX/d' subscriptions
+        cat subscriptions.fix | sed 's/.INBOX.//g' >> subscriptions
+
+        return 0
+}
+
+accountemail () {
+        accountcpanel=$1
+        ls -all /home/$accountcpanel/mail/*/*/subscriptions | awk -F"/" '{ print $6,$5 }' | sed s/\ /\@/g > /tmp/subscriptions-account-email.txt
+        cat /tmp/subscriptions-account-email.txt | while read listacc
+        do
+                convert2utf8 $listacc
+        done
+#       rm -rf /tmp/subscriptions-account-email.txt
+}
+
+all () {
+        ls -all /home/*/mail/*/*/subscriptions | awk -F"/" '{ print $6,$5 }' | sed s/\ /\@/g > /tmp/subscriptions-all-email.txt
+        cat /tmp/subscriptions-all-email.txt | while read list
+        do
+                convert2utf8 $list
+        done
+#       rm -rf /tmp/subscriptions-all-email.txt
+}
+
+emailfile () {
+        emaillist=$1
+        cat $emaillist | while read line
+        do
+                convert2utf8 $line
+        done
+}
+
+# Main function, switches options passed to it
+case "$1" in
+        -h) helptext
+        ;;
+        --help) helptext
+
+        case "$2" in
+                -all) all
+                ;;
+                --account) accountemail "$3"
+                ;;
+                -a) accountemail "$3"
+                ;;
+            --email) convert2utf8 "$3"
+                ;;
+                -e) convert2utf8 "$3"
+                ;;
+                --file) emailfile "$3"
+                ;;
+                -f) emailfile "$3"
+                ;;
+            *)
+                        tput bold
+                        tput setaf 1
+                        echo "Invalid Option!"
+                        helptext
+                        ;;
+        esac
+                                ;;
+                                -all) all
+                                ;;
+                                --account) accountemail "$2"
+                                ;;
+                                -a) accountemail "$2"
+                                ;;
+                                --email) convert2utf8 "$2"
+                                ;;
+                                -e) convert2utf8 "$2"
+                                ;;
+                                --file) emailfile "$2"
+                                ;;
+                                -f) emailfile "$2"
+                                ;;
+                            *)
+                                        tput bold
+                                        tput setaf 1
+                                        echo "Invalid Option!"
+                                        helptext
+                                        ;;
+esac

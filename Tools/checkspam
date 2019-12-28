@@ -1,0 +1,29 @@
+#!/bin/bash
+exec &> /var/log/spam.log
+
+INTERVAL="15" # Interval in seconds, must not exceed 300 (seconds)
+COUNTER="0"
+
+function spam {
+    exim -bpr | grep "<*@*>" | awk {'print $4'} |grep -v "<>" | cut -d "<" -f 2 | cut -d ">" -f 1 | sort | uniq -c | sort -n| while read number sender
+    do
+    counter=$(exiqgrep -f $sender|grep "<"|wc -l)
+    Domain="$(echo "${sender}" | cut -d'@' -f2)"
+    Account="$(cat /etc/userdomains | grep "${Domain}" | cut -d' ' -f2)"
+    i=`grep -E ^$domain /etc/localdomains | awk '{print $1}'`
+        if [ -z $i ]; then
+             exit 1
+        else [ $counter -ge 100 ]; then
+             echo "The address \"$sender\" on $(hostname) is attempting to send over 100 messages within 5 minutes. Amount: $counter" | mail -s "Spam Alert: $sender Spam On $(hostname)" longhm1@matbao.com
+             uapi --user=$Account Email suspend_outgoing email=$sender
+        fi
+    done
+}
+
+while [ $COUNTER -lt 300 ]; do
+    spam
+    sleep $INTERVAL
+    COUNTER=$[$COUNTER+$INTERVAL]
+done
+
+exit 0
