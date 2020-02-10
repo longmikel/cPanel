@@ -9,48 +9,51 @@ count_queue_all () {
     exim -bpc
     return 0
 }
-# Detect sender over 50 and less than 100 messages in a short time
+# Detect sender over 50 and less than 300 messages in a short time
 count_sender () {
     exim -bpr | grep "<*@*>" | awk {'print $4'} |grep -v "<>" | cut -d "<" -f 2 | cut -d ">" -f 1 | sort | uniq -c | sort -n| awk {'print $2'}| while read sender
     do
         count=$(exiqgrep -f $sender |grep "<"|wc -l)
+        count_old=$(exiqgrep -f $sender -o 1800|grep "<"|wc -l)
         domain="$(echo "${sender}" | cut -d'@' -f2)"
         account="$(cat /etc/userdomains | grep "${domain}" | cut -d' ' -f2)"
         local_domain=`grep -E ^$domain /etc/localdomains | awk '{print $1}'`
         suspend_outgoing=`grep -E ^$sender /etc/outgoing_mail_suspended_users | awk '{print $1}'`
         if [ $count -ge 50 ] && [ $count -lt 100 ] && [ -n $local_domain ] && [ -z $suspend_outgoing ]; then
-          # Suspend outgoing
-          uapi --user=$account Email suspend_outgoing email=$sender
+                uapi --user=$account Email suspend_outgoing email=$sender
+        elif [ $count -ge 50 ] && [ $count -lt 100 ] && [ -n $local_domain ] && [ -n $suspend_outgoing ]; then
+                uapi --user=$account Email suspend_login email=$sender
+        elif [ $count -ge 100 ] && [ $count -lt 300 ] && [ -n $local_domain ] && [ -z $suspend_outgoing ]; then
+                uapi --user=$account Email suspend_outgoing email=$sender
+                uapi --user=$account Email suspend_login email=$sender
+        elif [ $count -ge 100 ] && [ $count -lt 300 ] && [ -n $local_domain ] && [ -n $suspend_outgoing ]; then
+                uapi --user=$account Email suspend_login email=$sender
         fi
     done
 }
-# Detect sender in 1 minutes send over 100 messages
-count_sender_1m () {
+# Detect sender in 5 minutes send over 300 messages
+count_sender_5m () {
     exim -bpr | grep "<*@*>" | awk {'print $4'} |grep -v "<>" | cut -d "<" -f 2 | cut -d ">" -f 1 | sort | uniq -c | sort -n| awk {'print $2'}| while read sender
     do
-        count=$(exiqgrep -f $sender -o 60|grep "<"|wc -l)
+        count=$(exiqgrep -f $sender -o 300|grep "<"|wc -l)
         domain="$(echo "${sender}" | cut -d'@' -f2)"
         account="$(cat /etc/userdomains | grep "${domain}" | cut -d' ' -f2)"
         local_domain=`grep -E ^$domain /etc/localdomains | awk '{print $1}'`
         suspend_outgoing=`grep -E ^$sender /etc/outgoing_mail_suspended_users | awk '{print $1}'`
-        if [ $count -ge 100 ] && [ $count -lt 200 ] && [ -n $local_domain ]; then
-          # Suspend login
-          uapi --user=$account Email suspend_login email=$sender
-          # Remove queue
-          exim -bp | grep $sender | awk {'print $3'} | xargs exim -Mrm
-          # Alert
-          echo "The address \"$sender\" on $(hostname) is attempting to send over 100 messages within 1 minutes. Amount: $count" | mail -s "Spam Alert: $sender Spam On $(hostname)" 87849bc1.axys.asia@apac.teams.ms
-        fi
-        if [ $count -ge 100 ] && [ $count -lt 200 ] && [ -z $suspend_outgoing ]; then
-          # Suspend outgoing
-          uapi --user=$account Email suspend_outgoing email=$sender
-          # Remove queue
-          exim -bp | grep $sender | awk {'print $3'} | xargs exim -Mrm
+        if [ $count -ge 300 ] && [ $count -lt 500 ] && [ -n $local_domain ] && [ -z $suspend_outgoing ]; then
+                uapi --user=$account Email suspend_outgoing email=$sender
+                uapi --user=$account Email suspend_login email=$sender
+                exim -bp | grep $sender | awk {'print $3'} | xargs exim -Mrm
+                echo "The address \"$sender\" on $(hostname) is attempting to send over 300 messages within 5 minutes. Amount: $count" | mail -s "Spam Alert: $sender Spam On $(hostname)" 87849bc1.axys.asia@apac.teams.ms
+        elif [ $count -ge 300 ] && [ $count -lt 500 ] && [ -n $local_domain ] && [ -n $suspend_outgoing ]; then
+                uapi --user=$account Email suspend_login email=$sender
+                exim -bp | grep $sender | awk {'print $3'} | xargs exim -Mrm
+                echo "The address \"$sender\" on $(hostname) is attempting to send over 300 messages within 5 minutes. Amount: $count" | mail -s "Spam Alert: $sender Spam On $(hostname)" 87849bc1.axys.asia@apac.teams.ms
         fi
     done
 }
-# Detect sender in 5 minutes send over 200 messages
-count_sender_5m () {
+# Detect sender in 15 minutes send over 500 messages
+count_sender_15m () {
     exim -bpr | grep "<*@*>" | awk {'print $4'} |grep -v "<>" | cut -d "<" -f 2 | cut -d ">" -f 1 | sort | uniq -c | sort -n| awk {'print $2'}| while read sender
     do
         count=$(exiqgrep -f $sender -o 600|grep "<"|wc -l)
@@ -58,32 +61,29 @@ count_sender_5m () {
         account="$(cat /etc/userdomains | grep "${domain}" | cut -d' ' -f2)"
         local_domain=`grep -E ^$domain /etc/localdomains | awk '{print $1}'`
         suspend_outgoing=`grep -E ^$sender /etc/outgoing_mail_suspended_users | awk '{print $1}'`
-        if [ $count -ge 200 ] && [ -n $local_domain ]; then
-          # Remove queue
-          exim -bp | grep $sender | awk {'print $3'} | xargs exim -Mrm
-          # Alert
-          echo "The address \"$sender\" on $(hostname) is attempting to send over 200 messages within 5 minutes. Amount: $count" | mail -s "Spam Alert: $sender Spam On $(hostname)" 87849bc1.axys.asia@apac.teams.ms
-          # Suspend login
-          uapi --user=$account Email suspend_login email=$sender
-        fi
-          # Suspend outgoing
-        if [ $count -ge 200 ] && [ -z $suspend_outgoing ]; then
-          uapi --user=$account Email suspend_outgoing email=$sender
+        if [ $count -ge 500 ] && [ -n $local_domain ] && [ -z $suspend_outgoing ]; then
+                uapi --user=$account Email suspend_outgoing email=$sender
+                uapi --user=$account Email suspend_login email=$sender
+                exim -bp | grep $sender | awk {'print $3'} | xargs exim -Mrm
+                echo "The address \"$sender\" on $(hostname) is attempting to send over 500 messages within 5 minutes. Amount: $count" | mail -s "Spam Alert: $sender Spam On $(hostname)" 87849bc1.axys.asia@apac.teams.ms
+        elif [ $count -ge 500 ] && [ -n $local_domain ] && [ -n $suspend_outgoing ]; then
+                uapi --user=$account Email suspend_login email=$sender
+                exim -bp | grep $sender | awk {'print $3'} | xargs exim -Mrm
+                echo "The address \"$sender\" on $(hostname) is attempting to send over 500 messages within 5 minutes. Amount: $count" | mail -s "Spam Alert: $sender Spam On $(hostname)" 87849bc1.axys.asia@apac.teams.ms
         fi
     done
 }
 
 while [ $counter -lt 60 ]; do
-    if [ $(count_queue_all) -lt 100 ]; then
-      count_sender
-    elif [ $(count_queue_all) -lt 200 ]; then
-      count_sender_1m
+    if [ $(count_queue_all) -lt 300 ]; then
+        count_sender
+    elif [ $(count_queue_all) -lt 500 ]; then
+        count_sender_5m
     else
-      count_sender_5m
-      exit 1
+        count_sender_15m
+        exit 1
     fi
     sleep $interval
     counter=$[$counter+$interval]
 done
-
 exit 0
