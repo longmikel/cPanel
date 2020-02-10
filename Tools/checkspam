@@ -1,4 +1,6 @@
 #!/bin/bash
+log=/var/log/exim_spamlog
+date=$(date '+%Y-%m-%d %H:%M:%S')
 
 # Interval in seconds, must not exceed 60 (seconds)
 interval="15"
@@ -8,6 +10,15 @@ counter="0"
 count_queue_all () {
     exim -bpc
     return 0
+}
+
+# Count all queue frozen
+frozen () {
+        count=$(exim -bp|grep frozen|awk {'print $3'}|wc -l)
+        if [ $count -ne 0 ]; then
+                echo -e "$date $(hostname -a) Remove frozen with amount frozen: $count" >> /var/log/exim_spamlog
+                exim -bpr | grep frozen | awk {'print $3'} | xargs exim -Mrm > /dev/null 2>&1
+        fi
 }
 # Detect sender over 50 and less than 300 messages in a short time
 count_sender () {
@@ -77,12 +88,16 @@ count_sender_15m () {
 while [ $counter -lt 60 ]; do
     if [ $(count_queue_all) -lt 300 ]; then
         count_sender
+        frozen
     elif [ $(count_queue_all) -lt 500 ]; then
         count_sender_5m
+        frozen
     else
         count_sender_15m
+        frozen
         exit 1
     fi
+
     sleep $interval
     counter=$[$counter+$interval]
 done
