@@ -15,7 +15,7 @@ class return_to_webmail extends rcube_plugin
       'content' => ' Email Settings',
       'class'   => 'button-cpwebmail',
       'classsel' => 'button-cpwebmail button-selected',
-      'innerclass' => 'button-inner',
+      #'innerclass' => 'button-inner',
       'label'   => 'cpwebmail.cpwebmail',
       'type'    => 'link',
     ), 'taskbar');
