@@ -12,6 +12,14 @@ count_queue_all () {
     return 0
 }
 
+# Count all queue bounce
+bounce () {
+        count=$(exim -bpr | grep "<>" |wc -l)
+        if [ $count -ne 0 ]; then
+                echo -e "$date $(hostname -a) Remove bounce with amount bounce. Amount: $count" >> /var/log/exim_spamlog
+                exim -bp | grep '<>' | awk '/^ *[0-9]+[mhd]/{print $3}'| xargs exim -Mrm > /dev/null 2>&1
+        fi
+}
 # Count all queue frozen
 frozen () {
         count=$(exim -bp|grep frozen|awk {'print $3'}|wc -l)
@@ -88,12 +96,15 @@ while [ $counter -lt 60 ]; do
     if [ $(count_queue_all) -lt 300 ]; then
         count_sender
         frozen
+        bounce
     elif [ $(count_queue_all) -lt 500 ]; then
         count_sender_5m
         frozen
+        bounce
     else
         count_sender_15m
         frozen
+        bounce
         exit 1
     fi
 
