@@ -40,3 +40,5 @@ public_html/skins/larry/templates/compose.html
 ### Logo header for skins droid
 Không cho hiển thị logo Roundcube+ trên header webmail trong skins droid
 frame: logo_header.png to logo_header.png.bak trong đường dẫn skins/droid/assets/images/
+
+demo
