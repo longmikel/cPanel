@@ -1,0 +1,57 @@
+#!/bin/bash
+red=`tput setaf 1`
+green=`tput setaf 2`
+reset=`tput sgr0`
+res1=$(date +%s.%N)
+me=`basename "$0"`
+###########   >_   #####################################################################
+
+if [ -z "$1" ] && [ -z "$2" ];then
+    echo Usage: $0 [domain] [server]
+    exit 1
+fi
+
+account=`grep -E ^$1 /etc/userdomains | sed 's/://g' | awk '{print $2}'`
+
+backup () {
+          echo -n "Backup - $account "
+          /scripts/pkgacct --backup --skiplogs $account "/home/$account/" > /dev/null
+          scp -P1797 -oStrictHostKeyChecking=no -oCheckHostIP=no /home/$account.tar.gz $2:/home/
+          echo "- ${green}Done${reset}"
+}
+
+restore () {
+          echo -n "Restore - $account "
+          ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no $2 "/scripts/restorepkg --force /home/$account.tar.gz"
+          echo "- ${green}Done${reset}"
+}
+
+sync () {
+         echo -n "Rsync - $account "
+         rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $2:/home/$account/ > /dev/null
+         echo "- ${green}Done${reset}"
+}
+
+if [ -z "$1" ]; then
+        echo -e "--- Domain $1 does not exist ---"
+        exit 1
+else
+        backup
+        restore
+        sync
+fi
+
+###########   >_   #####################################################################
+res2=$(date +%s.%N)
+dt=$(echo "$res2 - $res1" | bc)
+dd=$(echo "$dt/86400" | bc)
+dt2=$(echo "$dt-86400*$dd" | bc)
+dh=$(echo "$dt2/3600" | bc)
+dt3=$(echo "$dt2-3600*$dh" | bc)
+dm=$(echo "$dt3/60" | bc)
+ds=$(echo "$dt3-60*$dm" | bc)
+echo "============================="
+printf "Total runtime: %d:%02d:%02d:%02.4f\n" $dd $dh $dm $ds
+enddate=$(date +%T\ %d-%m-%Y)
+echo "=    $enddate    ="
+echo "============================="
