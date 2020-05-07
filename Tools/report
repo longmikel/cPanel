@@ -1,0 +1,28 @@
+#!/bin/bash
+HOSTNAME=$(hostname)
+IP=$(curl ipinfo.io/ip)
+CPU=`nproc`
+RAM=`free -g | grep "Mem:" | awk '{print$2}'`
+DISK_QUOTA=`df -h --direct /home | awk '{print$2}' | sed -n 2p`
+DISK_USAGE=`df -h --direct /home | awk '{print$3}' | sed -n 2p`
+DISK_FREE=`df -h --direct /home | awk '{print$4}' | sed -n 2p`
+DOMAIN=$(find /var/cpanel/users -type f -print | wc -l)
+EMAIL=$(sed "s|:||g" /etc/userdomains | awk '!/^\* nobody/{print $1, $2 | "sort | uniq" }' | awk '{print "cat /home/"$2"/etc/"$1"/passwd"}' | sh 2>/dev/null | wc -l)
+echo "Hostname: $HOSTNAME" > $HOSTNAME-$IP.txt
+echo "IP: $IP" >> $HOSTNAME-$IP.txt
+echo "CPU: $CPU Core" >> $HOSTNAME-$IP.txt
+echo "RAM: $RAM GB" >> $HOSTNAME-$IP.txt
+echo "Disk Total: $DISK_QUOTA" >> $HOSTNAME-$IP.txt
+echo "Disk Usage: $DISK_USAGE" >> $HOSTNAME-$IP.txt
+echo "Disk Free: $DISK_FREE" >> $HOSTNAME-$IP.txt
+echo "Domain Total: $DOMAIN" >> $HOSTNAME-$IP.txt
+echo "Email Total: $EMAIL" >> $HOSTNAME-$IP.txt
+echo "----------------------------------------" >> $HOSTNAME-$IP.txt
+awk -F ": " '{print $1,$2}' /etc/trueuserdomains | grep -v salehost | while read DOMAIN USER;
+do
+        PACKAGE=`grep -w $USER /etc/userplans|awk -F ": " '{print $2}'`
+        [[ -f /var/cpanel/suspendinfo/$USER ]] && STATUS="0" || STATUS="1"
+        QUOTA=`quota -su $USER | awk '{print $1}' | tail -n 1`
+        echo "$DOMAIN|$PACKAGE|$QUOTA|$STATUS" >> $HOSTNAME-$IP.txt
+done
+exit 0
