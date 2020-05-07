@@ -1,5 +1,8 @@
 #!/bin/bash
+DATE=$(date +%Y-%m-%d)
 HOSTNAME=$(hostname)
+ALIAS_NAME=$(hostname -a)
+BACKUP_DIR="/backup/$ALIAS_NAME/$DATE/accounts/"
 IP=$(curl ipinfo.io/ip)
 CPU=`nproc`
 RAM=`free -g | grep "Mem:" | awk '{print$2}'`
@@ -8,6 +11,7 @@ DISK_USAGE=`df -h --direct /home | awk '{print$3}' | sed -n 2p`
 DISK_FREE=`df -h --direct /home | awk '{print$4}' | sed -n 2p`
 DOMAIN=$(find /var/cpanel/users -type f -print | wc -l)
 EMAIL=$(sed "s|:||g" /etc/userdomains | awk '!/^\* nobody/{print $1, $2 | "sort | uniq" }' | awk '{print "cat /home/"$2"/etc/"$1"/passwd"}' | sh 2>/dev/null | wc -l)
+BACKUP=$(find $BACKUP_DIR -name "*.tar.gz" -type f -print | wc -l)
 echo "Hostname: $HOSTNAME" > $HOSTNAME-$IP.txt
 echo "IP: $IP" >> $HOSTNAME-$IP.txt
 echo "CPU: $CPU Core" >> $HOSTNAME-$IP.txt
