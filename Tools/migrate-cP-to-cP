@@ -1,4 +1,5 @@
 #!/bin/bash
+
 red=`tput setaf 1`
 green=`tput setaf 2`
 reset=`tput sgr0`
@@ -6,40 +7,118 @@ res1=$(date +%s.%N)
 me=`basename "$0"`
 ###########   >_   #####################################################################
 
+# Set verbose to null
+verbose=""
+
+# Print the help text
+helptext () {
+    tput bold
+    tput setaf 2
+    echo "[cPanel]"
+    echo "USAGE: $0 [Options] [Domain] [Server]"
+    echo "Options:"
+    echo "  -h, --help  display this help and exit"
+    echo "  -all,       run on all backup, restore account and rsync data"
+    echo "  -a, --account specify account"
+    echo "  -e, --email         specify email"
+    echo "  -f, --file  list email from file"
+    echo "."
+    echo "."
+    echo "."
+    echo "- Fix dovecot 2 INBOX and update subscriptions"
+        tput bold
+        tput setaf 1
+        echo "- Only run 1 time!"
+    tput sgr0
+    exit 0
+}
+
 if [ -z "$1" ] && [ -z "$2" ];then
     echo Usage: $0 [domain] [server]
     exit 1
 fi
 
+# Define account and ip
 account=`grep -E ^$1 /etc/userdomains | sed 's/://g' | awk '{print $2}'`
+ip=$2
+
+all () {
+          # Backup
+          echo -n "Backup - $account "
+                /scripts/pkgacct $account --backup --skiplogs "/home/$account/" > /dev/null
+                scp -P1797 /home/$account/$account'.tar.gz' $ip:/home/ > /dev/null
+          echo "- ${green}Done Backup${reset}"
+
+          sleep 5
+          # Restore
+          echo -n "Restore - $account "
+                ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no $ip "/scripts/restorepkg --force /home/$account.tar.gz" > /dev/null
+          echo "- ${green}Done Restore${reset}"
+
+          sleep 5
+          # Rsync
+          echo -n "Rsync - $account "
+                rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $ip:/home/$account/ > /dev/null
+          echo "- ${green}Done Rsync${reset}"
+}
 
 backup () {
           echo -n "Backup - $account "
-          /scripts/pkgacct --backup --skiplogs $account "/home/$account/" > /dev/null
-          scp -P1797 -oStrictHostKeyChecking=no -oCheckHostIP=no /home/$account.tar.gz $2:/home/
-          echo "- ${green}Done${reset}"
+          /scripts/pkgacct $account --backup --skiplogs "/home/$account/" > /dev/null
+          scp -P1797 /home/$account/$account.tar.gz $ip:/home/ > /dev/null
+          echo "- ${green}Done Backup${reset}"
 }
 
 restore () {
           echo -n "Restore - $account "
-          ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no $2 "/scripts/restorepkg --force /home/$account.tar.gz"
-          echo "- ${green}Done${reset}"
+          ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no $ip "/scripts/restorepkg --force /home/$account.tar.gz"
+          echo "- ${green}Done Restore${reset}"
 }
 
 sync () {
          echo -n "Rsync - $account "
-         rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $2:/home/$account/ > /dev/null
-         echo "- ${green}Done${reset}"
+         rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $ip:/home/$account/ > /dev/null
+         echo "- ${green}Done Rsync${reset}"
 }
 
-if [ -z "$1" ]; then
-        echo -e "--- Domain $1 does not exist ---"
-        exit 1
+if [ -z $account ]; then
+  echo -e "--- Domain $1 does not exist ---"
+  exit 1
 else
-        backup
-        restore
-        sync
+  echo -e "--- Domain $1 exist ---"
+  backup
+  restore
+  sync
 fi
+
+# Main function, switches options passed to it
+case "$1" in
+        -h) helptext
+        ;;
+        --help) helptext
+
+        case "$2" in
+                -all) all
+                ;;
+                --account) accountemail "$2"
+                ;;
+                -a) accountemail "$3"
+                ;;
+            --email) convert2utf8 "$3"
+                ;;
+                -e) convert2utf8 "$3"
+                ;;
+                --file) emailfile "$3"
+                ;;
+                -f) emailfile "$3"
+                ;;
+            *)
+                        tput bold
+                        tput setaf 1
+                        echo "Invalid Option!"
+                        helptext
+                        ;;
+        esac
 
 ###########   >_   #####################################################################
 res2=$(date +%s.%N)
