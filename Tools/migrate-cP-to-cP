@@ -19,13 +19,11 @@ helptext () {
     echo "Options:"
     echo "  -h, --help  display this help and exit"
     echo "  -all,       run on all backup, restore account and rsync data"
-    echo "  -a, --account specify account"
-    echo "  -e, --email         specify email"
-    echo "  -f, --file  list email from file"
+    echo "  -b, --backup specify account"
+    echo "  -s, --sync   data sync specify account"
     echo "."
     echo "."
     echo "."
-    echo "- Fix dovecot 2 INBOX and update subscriptions"
         tput bold
         tput setaf 1
         echo "- Only run 1 time!"
@@ -100,17 +98,13 @@ case "$1" in
         case "$2" in
                 -all) all
                 ;;
-                --account) accountemail "$2"
+                --backup) backup
                 ;;
-                -a) accountemail "$3"
+                -b) backup
                 ;;
-            --email) convert2utf8 "$3"
+            --sync) sync
                 ;;
-                -e) convert2utf8 "$3"
-                ;;
-                --file) emailfile "$3"
-                ;;
-                -f) emailfile "$3"
+                -s) sync
                 ;;
             *)
                         tput bold
