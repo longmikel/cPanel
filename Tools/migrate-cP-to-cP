@@ -19,7 +19,6 @@ helptext () {
     echo "Options:"
     echo "  -h, --help  display this help and exit"
     echo "  -all,       run on all backup, restore account and rsync data"
-    echo "  -b, --backup specify account"
     echo "  -s, --sync   data sync specify account"
     echo "."
     echo "."
@@ -60,34 +59,11 @@ all () {
           echo "- ${green}Done Rsync${reset}"
 }
 
-backup () {
-          echo -n "Backup - $account "
-          /scripts/pkgacct $account --backup --skiplogs "/home/$account/" > /dev/null
-          scp -P1797 /home/$account/$account.tar.gz $ip:/home/ > /dev/null
-          echo "- ${green}Done Backup${reset}"
-}
-
-restore () {
-          echo -n "Restore - $account "
-          ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no $ip "/scripts/restorepkg --force /home/$account.tar.gz"
-          echo "- ${green}Done Restore${reset}"
-}
-
 sync () {
          echo -n "Rsync - $account "
          rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $ip:/home/$account/ > /dev/null
          echo "- ${green}Done Rsync${reset}"
 }
-
-if [ -z $account ]; then
-  echo -e "--- Domain $1 does not exist ---"
-  exit 1
-else
-  echo -e "--- Domain $1 exist ---"
-  backup
-  restore
-  sync
-fi
 
 # Main function, switches options passed to it
 case "$1" in
@@ -97,10 +73,6 @@ case "$1" in
 
         case "$2" in
                 -all) all
-                ;;
-                --backup) backup
-                ;;
-                -b) backup
                 ;;
             --sync) sync
                 ;;
