@@ -30,40 +30,58 @@ helptext () {
     exit 0
 }
 
-if [ -z "$1" ] && [ -z "$2" ];then
-    echo Usage: $0 [domain] [server]
-    exit 1
-fi
-
-# Define account and ip
-account=`grep -E ^$1 /etc/userdomains | sed 's/://g' | awk '{print $2}'`
-ip=$2
-
 all () {
-          # Backup
-          echo -n "Backup - $account "
+       domain=$1
+       server=$2
+       account=`grep -E ^$domain /etc/userdomains | sed 's/://g' | awk '{print $2}'`
+       # Check Domain
+       if [ -z $account ]; then
+       echo -e "$domain does not exists on server"
+                exit 1
+       else
+       # Backup
+       echo -n "Backup - $account "
                 /scripts/pkgacct $account --backup --skiplogs "/home/$account/" > /dev/null
-                scp -P1797 /home/$account/$account'.tar.gz' $ip:/home/ > /dev/null
-          echo "- ${green}Done Backup${reset}"
+                scp -P1797 -oStrictHostKeyChecking=no -oCheckHostIP=no /home/$account/$account.tar.gz $server:/home/ > /dev/null
+       echo "- ${green}Done Backup${reset}"
 
-          sleep 5
-          # Restore
-          echo -n "Restore - $account "
-                ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no $ip "/scripts/restorepkg --force /home/$account.tar.gz" > /dev/null
-          echo "- ${green}Done Restore${reset}"
+       sleep 5
+       # Restore
+       echo -n "Restore - $account "
+                ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no $server "/scripts/restorepkg --force /home/$account.tar.gz" > /dev/null
+       echo "- ${green}Done Restore${reset}"
 
-          sleep 5
-          # Rsync
-          echo -n "Rsync - $account "
-                rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $ip:/home/$account/ > /dev/null
-          echo "- ${green}Done Rsync${reset}"
+       sleep 5
+       # Rsync
+       echo -n "Rsync - $account "
+                rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $server:/home/$account/ > /dev/null
+       echo "- ${green}Done Rsync${reset}"
+       fi
 }
 
 sync () {
-         echo -n "Rsync - $account "
-         rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $ip:/home/$account/ > /dev/null
-         echo "- ${green}Done Rsync${reset}"
+        domain=$1
+        server=$2
+        account=`grep -E ^$domain /etc/userdomains | sed 's/://g' | awk '{print $2}'`
+        if [ -z $account ]; then
+        echo -e "$domain does not exists on server"
+                exit 1
+        else
+        # Rync
+        echo -n "Rsync - $account "
+                rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $server:/home/$account/ > /dev/null
+        echo "- ${green}Done Rsync${reset}"
+        fi
 }
+
+# Check the domain and server parameters are passed
+if [ -z "$2" ] || [ -z "$3" ] || [ -n "$4" ] ;then
+    tput bold
+    tput setaf 1
+    echo "Invalid Option!"
+    helptext
+    exit 1
+fi
 
 # Main function, switches options passed to it
 case "$1" in
@@ -72,11 +90,13 @@ case "$1" in
         --help) helptext
 
         case "$2" in
-                -all) all
+                --all) all "$3" "$4"
                 ;;
-            --sync) sync
+                -a) all "$3" "$4"
                 ;;
-                -s) sync
+                --sync) sync "$3" "$4"
+                ;;
+                -s) sync "$3" "$4"
                 ;;
             *)
                         tput bold
@@ -85,7 +105,22 @@ case "$1" in
                         helptext
                         ;;
         esac
-
+                ;;
+                -all) all "$2" "$3"
+                ;;
+                -a) all "$2" "$3"
+                ;;
+                --sync) sync "$2" "$3"
+                ;;
+                -s) sync "$2" "$3"
+                ;;
+            *)
+                        tput bold
+                        tput setaf 1
+                        echo "Invalid Option!"
+                        helptext
+                        ;;
+esac
 ###########   >_   #####################################################################
 res2=$(date +%s.%N)
 dt=$(echo "$res2 - $res1" | bc)
