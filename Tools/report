@@ -21,6 +21,7 @@ echo "Disk Usage: $DISK_USAGE" >> $HOSTNAME-$IP.txt
 echo "Disk Free: $DISK_FREE" >> $HOSTNAME-$IP.txt
 echo "Domain Total: $DOMAIN" >> $HOSTNAME-$IP.txt
 echo "Email Total: $EMAIL" >> $HOSTNAME-$IP.txt
+echo "Backup Total: $BACKUP" >> $HOSTNAME-$IP.txt
 echo "----------------------------------------" >> $HOSTNAME-$IP.txt
 awk -F ": " '{print $1,$2}' /etc/trueuserdomains | grep -v salehost | while read DOMAIN USER;
 do
@@ -30,3 +31,61 @@ do
         echo "$DOMAIN|$PACKAGE|$QUOTA|$STATUS" >> $HOSTNAME-$IP.txt
 done
 exit 0
+
+#!/bin/bash
+HOSTSERVER=`hostname -f`
+BACKUPDIR=/backup/${HOSTSERVER}/wbackup
+TIME_AFTER=`date -d "-32 days" +%Y%m%d`
+
+for i in `ls -d $BACKUPDIR/* | cut -d"/" -f5`   ##xem ngay co ban backup
+do
+NUM_BKHOST=`ls -l $BACKUPDIR/$i | wc -l`              ##dem so ban backup hosting
+NUM_HOST=`cat /etc/trueuserdomains | grep -v "salehost" | wc -l`        ##dem so luong hosting
+BACKUP_DATE=`date -d "$i" +%Y%m%d`      ##dinh dang ngay co ban backup
+        if [ $TIME_AFTER -le $BACKUP_DATE ]             ##xac dinh co backup trong khoang thoi gian dinh truoc
+        then
+                        result=$(expr $NUM_HOST - $NUM_BKHOST)
+                        echo $result > /sbin/scripts/monitor_backuphost.txt
+
+        else
+                sh /sbin/scripts/backup.sh      ##chay lai backup khi khong co backup trong vong 32 ngay
+        fi
+done
+
+#!/bin/sh
+DATE=`date +%Y-%m-%d`
+HOSTSERVER=`hostname -f`
+BACKUPDIR=/backup/${HOSTSERVER}/wbackup
+BACKUPACCTDIR=$BACKUPDIR/$DATE
+
+rm -f /sbin/scripts/pkgacct
+rsync -a /usr/local/cpanel/scripts/pkgacct /sbin/scripts/pkgacct
+chown root:root /sbin/scripts/pkgacct
+chmod +x /sbin/scripts/pkgacct
+#sed -i 's/my @cmdline = ( $mysqldump/my @cmdline = 0; #( $mysqldump/' /sbin/scripts/pkgacct
+
+sed -i '/mail/d' /etc/cpbackup-exclude.conf
+sed -i '/public_html/d' /etc/cpbackup-exclude.conf
+sed -i '/tmp/d' /etc/cpbackup-exclude.conf
+sed -i '/.trash/d' /etc/cpbackup-exclude.conf
+sed -i '/logs/d' /etc/cpbackup-exclude.conf
+
+echo "public_html/*.tar.gz" >> /etc/cpbackup-exclude.conf
+echo "tmp/*" >> /etc/cpbackup-exclude.conf
+echo ".trash/*" >> /etc/cpbackup-exclude.conf
+echo "logs/*" >> /etc/cpbackup-exclude.conf
+
+test -d "$BACKUPACCTDIR" || mkdir -p "$BACKUPACCTDIR"
+for i in `cat /etc/trueuserdomains | awk '{print $2}' | grep -v "salehost"`; do
+        /sbin/scripts/pkgacct $i --backup --nocompress $BACKUPACCTDIR
+done
+
+sed -i '/mail/d' /etc/cpbackup-exclude.conf
+sed -i '/public_html/d' /etc/cpbackup-exclude.conf
+sed -i '/tmp/d' /etc/cpbackup-exclude.conf
+sed -i '/.trash/d' /etc/cpbackup-exclude.conf
+sed -i '/logs/d' /etc/cpbackup-exclude.conf
+
+#find $BACKUPDIR -mindepth 1 -maxdepth 1 -type d -mtime +15 -exec rm -rf {} \;
+sh /sbin/scripts/remove_backup.sh
+#echo "Done !"
