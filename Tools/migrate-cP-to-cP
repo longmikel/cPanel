@@ -45,13 +45,13 @@ all () {
                 scp -P1797 -oStrictHostKeyChecking=no -oCheckHostIP=no /home/$account/$account.tar.gz $server:/home/ > /dev/null
        echo "- ${green}Done Backup${reset}"
 
-       sleep 5
+       sleep 3
        # Restore
        echo -n "Restore - $account "
                 ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no $server "/scripts/restorepkg --force /home/$account.tar.gz" > /dev/null
        echo "- ${green}Done Restore${reset}"
 
-       sleep 5
+       sleep 3
        # Rsync
        echo -n "Rsync - $account "
                 rsync -av --delete -e "ssh -p1797 -oStrictHostKeyChecking=no -oCheckHostIP=no" /home/$account/ $server:/home/$account/ > /dev/null
