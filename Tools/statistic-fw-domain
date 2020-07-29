@@ -1,0 +1,71 @@
+#!/bin/bash
+# Use domain
+if [ -z "$1" ]; then
+echo Usage: $0 {domain}
+exit 1
+fi
+
+# Check domain exist
+echo "Preparing to check domain $1, please wait..."
+sleep 3
+i=`grep -E ^$1 /etc/userdomains | sed 's/://g' | awk '{print $2}'`
+
+if [ -z $i ]; then
+echo -e "--- Domain $1 does not exist ---"
+exit 1
+else
+echo -e "--- Domain $1 exist ---"
+fi
+
+# Define
+domain=$1
+account="$(cat /etc/userdomains | grep "${domain}" | cut -d' ' -f2)"
+
+ls -d /home/$account/mail/$domain/*/ | awk 'BEGIN {
+        }
+        {
+        tcmd = "test -d " $1
+        if(!system(tcmd)){
+        split($1,MyArray,"/")
+        print MyArray[6] "@" MyArray[5]
+        }
+        }
+        ' > $me.mailbox
+
+# Statistic
+## Count Forwarders
+        Forwarders_Total=`uapi --user=$account Email count_forwarders|awk '$1 ~ /^data/ && !/autorespond/ {print $2}'`
+
+## Count Email Filter
+        Email_Filter_Total=`find /home/$account/etc/$domain/ -name '*yaml' |wc -l`
+
+## Count Global Filter
+        Global_Filter_Total=`uapi --user=$account Email count_filters|awk '$1 ~ /^data:/ {print $2}'`
+
+## Show Statistic
+echo "Total Forwarders: $Forwarders_Total, Total Global Filter: $Global_Filter_Total, Total Email Filter: $Email_Filter_Total"
+echo "##############################################################################"
+
+# List Email Forwarders
+        if [ $Forwarders_Total != 0 ]; then
+        echo -e "------------ < Email Forwarders for $domain > ----------"
+
+        cat $me.mailbox |while read email
+        do
+                sed "s|:| ->|g" /etc/valiases/$domain| awk '$1 ~ /^'$email'/ && !/autorespond/'
+        done
+        fi
+
+# List Email Filters
+        if [ $Email_Filter_Total != 0 ]; then
+        echo -e "---------- < Email Filters for $domain > ----------"
+
+        cat $me.mailbox |while read email
+        do
+                uapi --user=$account Email list_filters account=$email| awk '$1 ~ /^'dest'/ && !/INBOX/ {print $2}'| while read delivery
+                do
+                echo "$email -> $delivery"
+                done
+        done
+        fi
+exit 0

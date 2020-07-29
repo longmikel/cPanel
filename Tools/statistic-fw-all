@@ -1,0 +1,63 @@
+#!/bin/sh
+HOSTNAME=$(hostname)
+IP=$(curl ipinfo.io/ip)
+count=1
+sed "s|:||g" /etc/userdomains | awk '!/^\* nobody/{print $1, $2 | "sort | uniq" }' > $me.account
+totalaccount=$(cat $me.account | wc -l)
+echo "Total Accounts: $totalaccount" > Statistics-$HOSTNAME-$IP.txt
+cat $me.account | while read domain account
+do
+echo -n "Check - $account "
+echo -n "- ($count/$totalaccount) "
+# Define
+count=$(($count+1))
+ls -d /home/$account/mail/$domain/*/ | awk 'BEGIN {
+        }
+        {
+                tcmd = "test -d " $1
+                if(!system(tcmd)){
+                split($1,MyArray,"/")
+                print MyArray[6] "@" MyArray[5]
+        }
+        }
+        ' > $me.mailbox
+
+# Count Forwarders
+Forwarders_Total=`uapi --user=$account Email count_forwarders|awk '$1 ~ /^data/ && !/autorespond/ {print $2}'`
+
+# Count Email Filter
+Email_Filter_Total=`find /home/$account/etc/$domain/ -name '*yaml' |wc -l`
+
+# Count Global Filter
+Global_Filter_Total=`uapi --user=$account Email count_filters|awk '$1 ~ /^data:/ {print $2}'`
+
+# Show Statistic
+echo "Domain: $domain, Total Forwarders: $Forwarders_Total, Total Global Filter: $Global_Filter_Total, Total Email Filter: $Email_Filter_Total" >> Statistics-$HOSTNAME-$IP.txt
+echo "-----------------------------------------------------------------------------------------------" >> Statistics-$HOSTNAME-$IP.txt
+
+# List Email Forwarders
+if [ $Forwarders_Total != 0 ]; then
+echo -e "########## < Email Forwarders for $domain > ##########" >> Statistics-$HOSTNAME-$IP.txt
+cat $me.mailbox | while read email
+        do
+fw="$(echo "${email}" | cut -d'@' -f2)"
+sed "s|:| ->|g" /etc/valiases/$fw| awk '$1 ~ /^'$email'/ && !/autorespond/' >> Statistics-$HOSTNAME-$IP.txt
+done
+echo "-----------------------------------------------------------------------------------------------" >> Statistics-$HOSTNAME-$IP.txt
+fi
+
+# List Email Filters
+if [ $Email_Filter_Total != 0 ]; then
+echo -e "########## < Email Filters for $domain > ##########" >> Statistics-$HOSTNAME-$IP.txt
+cat $me.mailbox | while read email
+        do
+uapi --user=$account Email list_filters account=$email| awk '$1 ~ /^'dest'/ && !/INBOX/ {print $2}'| while read delivery
+                do
+echo "$email -> $delivery" >> Statistics-$HOSTNAME-$IP.txt
+done
+done
+echo "-----------------------------------------------------------------------------------------------" >> Statistics-$HOSTNAME-$IP.txt
+fi
+echo "- Done"
+done
+exit 0
