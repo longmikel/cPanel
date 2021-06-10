@@ -1,0 +1,53 @@
+#!/bin/bash
+GREEN='\e[32m'
+STD='\e[39m'
+ALIAS_NAME=$(hostname -a)
+TIMESTAMP=$(date +"%F")
+BACKUP_DIR_ACC="/Backup/cPanel/$ALIAS_NAME/$TIMESTAMP/accounts"
+BACKUP_DIR_SYSTEM_FILES="/Backup/cPanel/$ALIAS_NAME/$TIMESTAMP/system/files"
+SECONDS=0
+
+echo "Preparing to sync backup on OneDrive to Local, please wait..."
+sleep 3
+mkdir /data
+/usr/bin/rclone copy "onedrive:$BACKUP_DIR_ACC" /data >> /var/log/rclone.log 2>&1
+/usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_cpanel_exim_system_filter_mb.gz" /data >> /var/log/rclone.log 2>&1
+/usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_offlinedomains.gz" /data >> /var/log/rclone.log 2>&1
+/usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_routing.gz" /data >> /var/log/rclone.log 2>&1
+/usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_staticroutes.gz" /data >> /var/log/rclone.log 2>&1
+
+echo "Preparing to extract file, please wait..."
+sleep 3
+find /data/ -type f -name "_etc_cpanel_exim_system_filter_mb.gz" -exec gunzip {} \;
+find /data/ -type f -name "_etc_offlinedomains.gz" -exec gunzip {} \;
+find /data/ -type f -name "_etc_routing.gz" -exec gunzip {} \;
+find /data/ -type f -name "_etc_staticroutes.gz" -exec gunzip {} \;
+echo -e "${GREEN} Done ${STD}"
+
+echo "Preparing to convert file, please wait..."
+sleep 3
+mv /data/_etc_cpanel_exim_system_filter_mb /etc/cpanel_exim_system_filter_mb
+mv /data/_etc_offlinedomains /etc/offlinedomains
+mv /data/_etc_routing /etc/routing
+mv /data/_etc_staticroutes /etc/staticroutes
+echo -e "${GREEN} Done ${STD}"
+
+echo "Preparing to change owner and mod, please wait..."
+sleep 3
+chown -R root.mail /etc/offlinedomains
+chown -R root.mail /etc/routing
+chown -R root.mail /etc/staticroutes
+echo -e "${GREEN} Done ${STD}"
+
+echo "Preparing to restore each accounts, please wait..."
+sleep 3
+for i in `ls -l /data | awk '{print $9}' | grep ".tar.gz"`; do
+        echo -e "Begin restore $i...\n"
+		/scripts/restorepkg --force /data/$i
+        echo -e "[Done]\n"
+done
+rm -rf /data/*
+echo -e "${GREEN} Done ${STD}"
+
+duration=$SECONDS
+echo "Total $size, $(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."
