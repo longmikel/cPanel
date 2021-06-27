@@ -1,81 +1,134 @@
 #!/bin/bash
-# Prepare the environment
+# Prepare the environment for the main ip swap configuration
 IPv4_WAN_OLD="103.15.48.214"
 IPv4_LAN_OLD="192.168.48.214"
 IPv4_WAN_NEW=$(ip -4 addr show dev eth0 | sed -ne 's|^.* inet \([^/]*\)/.* scope global.*$|\1|p')
+MacAddr_LAN_OLD="00:1c:42:09:b3:34"
+MacAddr_LAN_NEW=$(ip link show eth1 | grep "link/ether" | awk '{print $2}')
 
-## Change the server's Network
-function Network() {
+# Prepare the environment for recovery configuration
+ALIAS_NAME=$(hostname -a)
+TIMESTAMP=$(date +"%F")
+BACKUP_DIR_ACC="/Backup/cPanel/$ALIAS_NAME/$TIMESTAMP/accounts"
+BACKUP_DIR_SYSTEM_FILES="/Backup/cPanel/$ALIAS_NAME/$TIMESTAMP/system/files"
+SECONDS=0
+
+function Swap() {
+    ## Change the server's Network
     echo ""
-    echo "Tell me the local IP address of the server."
+    echo "Tell me the LAN IP address of the server."
     echo ""
 
     read -rp "IPv4 LAN: " -e IPv4_LAN_NEW
-    MacAddr_LAN_OLD="00:1c:42:09:b3:34"
-    MacAddr_LAN_NEW=$(ip link show eth1 | grep "link/ether" | awk '{print $2}')
-    ### Modify IPv4 LAN
-    sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/sysconfig/network-scripts/ifcfg-eth1
-    ### Modify MACADDR LAN
-    sed -i "s/$MacAddr_LAN_OLD/$MacAddr_LAN_NEW/g" /etc/sysconfig/network-scripts/ifcfg-eth1
-    ### UP IPv4 LAN
-    ifup eth1
-}
 
-## Change the server's IP
-function IP() {
+    ### Change IPv4 for LAN Network 
+    sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/sysconfig/network-scripts/ifcfg-eth1
+
+    ### Change Mac Address for LAN Network
+    sed -i "s/$MacAddr_LAN_OLD/$MacAddr_LAN_NEW/g" /etc/sysconfig/network-scripts/ifcfg-eth1
+
+    ### Start UP IPv4 for LAN Network
+    ifup eth1
+
+    ## Change the server's IP
+    ### Change main IP address
     sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /etc/wwwacct.conf
     sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /var/cpanel/mainip
-    /usr/local/cpanel/bin/setsiteip -u salehost $IPv4_WAN_NEW
-}
 
-## Change the server’s Hostname
-function Hostname() {
+    ### Change an account’s IP address
+    /usr/local/cpanel/bin/setsiteip -u salehost $IPv4_WAN_NEW
+
+    ## Change the server’s Hostname
     echo ""
     echo "Tell me the Hostname of the server."
     echo ""
 
     read -rp "HOSTNAME: " -e HOSTNAME
+
+    ### Change Hostname
     /usr/local/cpanel/bin/set_hostname $HOSTNAME
     sed -i "s/proxx.emailserver.vn/$HOSTNAME/g" /etc/wwwacct.conf
     sed -i "s/proxx.emailserver.vn/$HOSTNAME/g" /etc/my.cnf
+
+    ### Restart services MYSQL
     systemctl restart mysql
+
+    ### Change the server's Autodiscover Hostname
     sed -i "s/proxx.emailserver.vn/$HOSTNAME/g" /var/cpanel/cpanel.config
+
+    ### Change the server's Cache IP address
     sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /var/cpanel/userdata/nobody/"$HOSTNAME"
     sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /var/cpanel/userdata/nobody/"$HOSTNAME".cache
-    rm -rf /var/lib/mysql/proxx.emailserver.vn.err
-    rm -rf proxx.emailserver.vn-103.15.48.214.txt
-}
 
-## Change the server’s DNS
-function DNS() {
-    whmapi1 --output=jsonpretty killdns domain='proxx.emailserver.vn'
-    whmapi1 resetzone domain='salehost.matbao.net'
+    ### Remove file old
+    rm -rf /var/lib/mysql/proxx.emailserver.vn.err
+
+    ## Change the server’s DNS
+    ### Remove zone dns proxx (hostname for temp) and resetzone with domain default
+    whmapi1 --output=jsonpretty killdns domain="proxx.emailserver.vn"
+    whmapi1 resetzone domain="salehost.matbao.net"
     sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /var/named/"$HOSTNAME".db
-    ### Modify file hosts
-    Alias_Hostname=$(hostname -a)
+
+    ### Change file hosts
     sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /etc/hosts
     sed -i "s/proxx.emailserver.vn/$HOSTNAME/g" /etc/hosts
-    sed -i "s/proxx/$Alias_Hostname/g" /etc/hosts
-}
+    sed -i "s/proxx/$ALIAS_NAME/g" /etc/hosts
 
-## Change the server's Elastic
-function Elastic() {
+    ## Change the server's Elastic
     IPv4_LAN_NEW=$(ip -4 addr show dev eth1 | sed -ne 's|^.* inet \([^/]*\)/.* scope global.*$|\1|p')
-    Alias_Hostname=$(hostname -a)
     sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/logstash/conf.d/cp/10_input.conf
     sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/logstash/logstash.yml
-    sed -i "s/proxx/$Alias_Hostname/g" /etc/logstash/logstash.yml
+    sed -i "s/proxx/$ALIAS_NAME/g" /etc/logstash/logstash.yml
     sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/filebeat/filebeat.yml
-}
 
-## Change the server's Monitor
-function Monitor() {
+    ## Change the server's Monitor
     Alias_XX=$(hostname -a |sed 's\pro\\g')
     sed -i "s/XX/$Alias_XX/g" /etc/zabbix/zabbix_agentd.conf
 }
-Network
-IP
-Hostname
-DNS
-Elastic
-Monitor
+
+function Recovery() {
+    echo "Preparing to sync backup on OneDrive to Local, please wait..."
+    sleep 3
+    mkdir /data
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_ACC" /data >> /var/log/rclone.log 2>&1
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_cpanel_exim_system_filter_mb.gz" /data >> /var/log/rclone.log 2>&1
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_offlinedomains.gz" /data >> /var/log/rclone.log 2>&1
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_routing.gz" /data >> /var/log/rclone.log 2>&1
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_staticroutes.gz" /data >> /var/log/rclone.log 2>&1
+
+    echo "Preparing to extract file, please wait..."
+    sleep 3
+    find /data/ -type f -name "_etc_cpanel_exim_system_filter_mb.gz" -exec gunzip {} \;
+    find /data/ -type f -name "_etc_offlinedomains.gz" -exec gunzip {} \;
+    find /data/ -type f -name "_etc_routing.gz" -exec gunzip {} \;
+    find /data/ -type f -name "_etc_staticroutes.gz" -exec gunzip {} \;
+    echo -e "${GREEN} Done ${STD}"
+
+    echo "Preparing to convert file, please wait..."
+    sleep 3
+    mv /data/_etc_cpanel_exim_system_filter_mb /etc/cpanel_exim_system_filter_mb
+    mv /data/_etc_offlinedomains /etc/offlinedomains
+    mv /data/_etc_routing /etc/routing
+    mv /data/_etc_staticroutes /etc/staticroutes
+    echo -e "${GREEN} Done ${STD}"
+
+    echo "Preparing to change owner and mod, please wait..."
+    sleep 3
+    chown -R root.mail /etc/offlinedomains
+    chown -R root.mail /etc/routing
+    chown -R root.mail /etc/staticroutes
+    echo -e "${GREEN} Done ${STD}"
+
+    echo "Preparing to restore each accounts, please wait..."
+    sleep 3
+    for i in `ls -l /data | awk '{print $9}' | grep ".tar.gz"`; do
+        echo -e "Begin restore $i...\n"
+		    /scripts/restorepkg --force /data/$i
+        echo -e "[Done]\n"
+    done
+    rm -rf /data/*
+    echo -e "${GREEN} Done ${STD}"
+
+    duration=$SECONDS
+    echo "Total $size, $(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."
+}
