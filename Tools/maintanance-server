@@ -78,7 +78,7 @@ function Swap() {
     IPv4_LAN_NEW=$(ip -4 addr show dev eth1 | sed -ne 's|^.* inet \([^/]*\)/.* scope global.*$|\1|p')
     sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/logstash/conf.d/cp/10_input.conf
     sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/logstash/logstash.yml
-    sed -i "s/proxx/$ALIAS_NAME/g" /etc/logstash/logstash.yml
+    sed -i "s/XX/$ALIAS_NAME/g" /etc/logstash/logstash.yml
     sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/filebeat/filebeat.yml
 
     ### Start Up Logstash
