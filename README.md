@@ -1,7 +1,7 @@
 # cPanel
 ## Quy trình clone máy chủ dùng cPanel
 - Clone máy chủ từ Template có sẵn.
-- Điều chỉnh thông IP LAN.
+- Điều chỉnh thông tin IP LAN.
 - Điều chỉnh IP WAN trong file hosts.
 - Điều chỉ IP trong Basic WebHost Manager:
 - Thay đổi từ IP (cũ của template) thành IP (mới sẽ sử dụng) trong IP Migration Wizard.
