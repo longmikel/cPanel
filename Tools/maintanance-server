@@ -1,4 +1,35 @@
 #!/bin/bash
+red=`tput setaf 1`
+green=`tput setaf 2`
+reset=`tput sgr0`
+res1=$(date +%s.%N)
+me=`basename "$0"`
+###########   >_   #####################################################################
+
+# Set verbose to null
+verbose=""
+
+# Print the help text
+helptext () {
+    tput bold
+    tput setaf 2
+    echo "[cPanel]"
+    echo "USAGE: $0 [Options]"
+    echo "Options:"
+    echo "  -h, --help  display this help and exit"
+    echo "  -a, --all       run on ip swap, recovery account"
+    echo "  -s, --swap   main ip swap configuration"
+    echo "  -r, --recovery   recovery account"
+    echo "."
+    echo "."
+    echo "."
+        tput bold
+        tput setaf 1
+        echo "- Only run 1 time!"
+    tput sgr0
+    exit 0
+}
+
 # Prepare the environment for the main ip swap configuration
 IPv4_WAN_OLD="103.15.48.214"
 IPv4_LAN_OLD="192.168.48.214"
@@ -13,7 +44,198 @@ BACKUP_DIR_ACC="/Backup/cPanel/$ALIAS_NAME/$TIMESTAMP/accounts"
 BACKUP_DIR_SYSTEM_FILES="/Backup/cPanel/$ALIAS_NAME/$TIMESTAMP/system/files"
 SECONDS=0
 
-function Swap() {
+function all() {
+## Change the server's Network
+    echo ""
+    echo "Tell me the LAN IP address of the server."
+    echo ""
+
+    read -rp "IPv4 LAN: " -e IPv4_LAN_NEW
+
+    ### Change IPv4 for LAN Network 
+    sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/sysconfig/network-scripts/ifcfg-eth1
+
+    ### Change Mac Address for LAN Network
+    sed -i "s/$MacAddr_LAN_OLD/$MacAddr_LAN_NEW/g" /etc/sysconfig/network-scripts/ifcfg-eth1
+
+    ### Start UP IPv4 for LAN Network
+    ifup eth1
+
+## Change the server's IP
+    ### Change main IP address
+    sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /etc/wwwacct.conf
+    sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /var/cpanel/mainip
+
+    ### Change an account’s IP address
+    /usr/local/cpanel/bin/setsiteip -u salehost $IPv4_WAN_NEW
+
+## Change the server’s Hostname
+    echo ""
+    echo "Tell me the Hostname of the server."
+    echo ""
+
+    read -rp "HOSTNAME: " -e HOSTNAME
+
+    ### Change Hostname
+    /usr/local/cpanel/bin/set_hostname $HOSTNAME
+    sed -i "s/proxx.emailserver.vn/$HOSTNAME/g" /etc/wwwacct.conf
+    sed -i "s/proxx.emailserver.vn/$HOSTNAME/g" /etc/my.cnf
+
+    ### Restart services MYSQL
+    systemctl restart mysql
+
+    ### Change the server's Autodiscover Hostname
+    sed -i "s/proxx.emailserver.vn/$HOSTNAME/g" /var/cpanel/cpanel.config
+
+    ### Change the server's Cache IP address
+    sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /var/cpanel/userdata/nobody/"$HOSTNAME"
+    sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /var/cpanel/userdata/nobody/"$HOSTNAME".cache
+
+    ### Remove file old
+    rm -rf /var/lib/mysql/proxx.emailserver.vn.err
+
+## Change the server’s DNS
+    ### Remove zone dns proxx (hostname for temp) and resetzone with domain default
+    whmapi1 --output=jsonpretty killdns domain="proxx.emailserver.vn"
+    whmapi1 resetzone domain="salehost.matbao.net"
+    sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /var/named/"$HOSTNAME".db
+
+    ### Change file hosts
+    sed -i "s/$IPv4_WAN_OLD/$IPv4_WAN_NEW/g" /etc/hosts
+    sed -i "s/proxx.emailserver.vn/$HOSTNAME/g" /etc/hosts
+    sed -i "s/proxx/$ALIAS_NAME/g" /etc/hosts
+
+## Change the server's Elastic
+    IPv4_LAN_NEW=$(ip -4 addr show dev eth1 | sed -ne 's|^.* inet \([^/]*\)/.* scope global.*$|\1|p')
+    sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/logstash/conf.d/cp/10_input.conf
+    sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/logstash/logstash.yml
+    sed -i "s/XX/$ALIAS_NAME/g" /etc/logstash/logstash.yml
+    sed -i "s/$IPv4_LAN_OLD/$IPv4_LAN_NEW/g" /etc/filebeat/filebeat.yml
+
+    ### Start Up Logstash
+    systemctl enable logstash
+    systemctl start logstash
+
+    ### Start Up Filebeat
+    systemctl enable filebeat
+    systemctl start filebeat
+
+## Change the server's Monitor
+    ### Zabbix Agent
+    Alias_XX=$(hostname -a |sed 's\pro\\g')
+    sed -i "s/XX/$Alias_XX/g" /etc/zabbix/zabbix_agentd.conf
+
+    ### SNMPv3 Agent
+:> /etc/snmp/snmpd.conf
+
+cat << EOT >> /etc/snmp/snmpd.conf
+# Map 'AWMpsw3fJfbdV4qFJZ4h' community to the 'ConfigUser'
+# Map '6vkjykCaWN93WY9qNxad' community to the 'AllUser'
+#       sec.name        source          community
+com2sec ConfigUser      default         AWMpsw3fJfbdV4qFJZ4h
+com2sec AllUser         default         6vkjykCaWN93WY9qNxad
+# Map 'ConfigUser' to 'ConfigGroup' for SNMP Version 2c
+# Map 'AllUser' to 'AllGroup' for SNMP Version 2c
+#                       sec.model       sec.name
+group   ConfigGroup     v2c             ConfigUser
+group   AllGroup        v2c             AllUser
+# Define 'SystemView', which includes everything under .1.3.6.1.2.1.1 (or .1.3.6.1.2.1.25.1)
+# Define 'AllView', which includes everything under .1
+#                       incl/excl       subtree
+view    SystemView      included        .1.3.6.1.2.1.1
+view    SystemView      included        .1.3.6.1.2.1.25.1.1
+view    AllView         included        .1
+# Give 'ConfigGroup' read access to objects in the view 'SystemView'
+# Give 'AllGroup' read access to objects in the view 'AllView'
+#                       context model   level   prefix  read            write   notify
+access  ConfigGroup     ""      any     noauth  exact   SystemView      none    none
+access  AllGroup        ""      any     noauth  exact   AllView         none    none
+
+engineIDType 1
+
+#Extenal script
+##CPU
+extend cpumaster /etc/snmp/scripts/CPU-Master
+##RAM
+extend rammaster /etc/snmp/scripts/RAM-Master
+##DISK
+extend diskmaster /etc/snmp/scripts/DISK-Master
+##INFO
+extend infomaster /etc/snmp/scripts/INFO-Master
+##Services
+extend servicemaster /etc/snmp/scripts/Services-Master
+#User snmp
+EOT
+
+    #### Create User
+    net-snmp-create-v3-user -ro -A CMpiXJkmv3Wyaw@mUT -a SHA -X d4N*XBcGp@AVNYvQyP -x AES zabbixsnmp
+
+    #### Start Up SNMP
+    systemctl enable snmpd
+    systemctl start snmpd
+
+## Change the server' Backup
+    sed -i "s/proxx/$ALIAS_NAME/g" /var/cpanel/backups/config
+
+## Change the server's Brand
+    ### CSS Logo
+    curl https://raw.githubusercontent.com/longmikel/cPanel/master/Brand/CSS/style_v2_optimized.css -o /usr/local/cpanel/base/unprotected/cpanel/style_v2_optimized.css
+    ### WHM Logo
+    curl https://raw.githubusercontent.com/longmikel/cPanel/master/Brand/Images/whm-logo_white.svg -o /usr/local/cpanel/base/unprotected/cpanel/images/whm-logo_white.svg
+    ### cPanel Logo
+    curl https://raw.githubusercontent.com/longmikel/cPanel/master/Brand/Images/cpanel-logo.svg -o /usr/local/cpanel/base/unprotected/cpanel/images/cpanel-logo.svg
+    ### Webmail Logo
+    curl https://raw.githubusercontent.com/longmikel/cPanel/master/Brand/Images/cpanel-logo.svg -o /usr/local/cpanel/base/unprotected/cpanel/images/cpanel-logo.svg
+
+## Recovery
+    echo "Preparing to sync backup on OneDrive to Local, please wait..."
+    sleep 3
+    mkdir /data
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_ACC" /data >> /var/log/rclone.log 2>&1
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_cpanel_exim_system_filter_mb.gz" /data >> /var/log/rclone.log 2>&1
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_offlinedomains.gz" /data >> /var/log/rclone.log 2>&1
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_routing.gz" /data >> /var/log/rclone.log 2>&1
+    /usr/bin/rclone copy "onedrive:$BACKUP_DIR_SYSTEM_FILES/_etc_staticroutes.gz" /data >> /var/log/rclone.log 2>&1
+
+    echo "Preparing to extract file, please wait..."
+    sleep 3
+    find /data/ -type f -name "_etc_cpanel_exim_system_filter_mb.gz" -exec gunzip {} \;
+    find /data/ -type f -name "_etc_offlinedomains.gz" -exec gunzip {} \;
+    find /data/ -type f -name "_etc_routing.gz" -exec gunzip {} \;
+    find /data/ -type f -name "_etc_staticroutes.gz" -exec gunzip {} \;
+    echo -e "${GREEN} Done ${STD}"
+
+    echo "Preparing to convert file, please wait..."
+    sleep 3
+    mv /data/_etc_cpanel_exim_system_filter_mb /etc/cpanel_exim_system_filter_mb
+    mv /data/_etc_offlinedomains /etc/offlinedomains
+    mv /data/_etc_routing /etc/routing
+    mv /data/_etc_staticroutes /etc/staticroutes
+    echo -e "${GREEN} Done ${STD}"
+
+    echo "Preparing to change owner and mod, please wait..."
+    sleep 3
+    chown -R root.mail /etc/offlinedomains
+    chown -R root.mail /etc/routing
+    chown -R root.mail /etc/staticroutes
+    echo -e "${GREEN} Done ${STD}"
+
+    echo "Preparing to restore each accounts, please wait..."
+    sleep 3
+    for i in `ls -l /data | awk '{print $9}' | grep ".tar.gz"`; do
+        echo -e "Begin restore $i...\n"
+		    /scripts/restorepkg --force /data/$i
+        echo -e "[Done]\n"
+    done
+    rm -rf /data/*
+    echo -e "${GREEN} Done ${STD}"
+
+    duration=$SECONDS
+    echo "Total $size, $(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."
+}
+###########   >_   #####################################################################
+
+function swap() {
 ## Change the server's Network
     echo ""
     echo "Tell me the LAN IP address of the server."
@@ -142,7 +364,10 @@ EOT
     systemctl enable snmpd
     systemctl start snmpd
 
-## Change the server's Brand
+## Change the server' Backup
+    sed -i "s/proxx/$ALIAS_NAME/g" /var/cpanel/backups/config
+
+## Change the server's Branding
     ### CSS Logo
     curl https://raw.githubusercontent.com/longmikel/cPanel/master/Brand/CSS/style_v2_optimized.css -o /usr/local/cpanel/base/unprotected/cpanel/style_v2_optimized.css
     ### WHM Logo
@@ -152,8 +377,9 @@ EOT
     ### Webmail Logo
     curl https://raw.githubusercontent.com/longmikel/cPanel/master/Brand/Images/cpanel-logo.svg -o /usr/local/cpanel/base/unprotected/cpanel/images/cpanel-logo.svg
 }
+###########   >_   #####################################################################
 
-function Recovery() {
+function recovery() {
     echo "Preparing to sync backup on OneDrive to Local, please wait..."
     sleep 3
     mkdir /data
@@ -169,7 +395,7 @@ function Recovery() {
     find /data/ -type f -name "_etc_offlinedomains.gz" -exec gunzip {} \;
     find /data/ -type f -name "_etc_routing.gz" -exec gunzip {} \;
     find /data/ -type f -name "_etc_staticroutes.gz" -exec gunzip {} \;
-    echo -e "${GREEN} Done ${STD}"
+    echo -e "${green} Done ${reset}"
 
     echo "Preparing to convert file, please wait..."
     sleep 3
@@ -177,25 +403,93 @@ function Recovery() {
     mv /data/_etc_offlinedomains /etc/offlinedomains
     mv /data/_etc_routing /etc/routing
     mv /data/_etc_staticroutes /etc/staticroutes
-    echo -e "${GREEN} Done ${STD}"
+    echo -e "${green} Done ${reset}"
 
     echo "Preparing to change owner and mod, please wait..."
     sleep 3
     chown -R root.mail /etc/offlinedomains
     chown -R root.mail /etc/routing
     chown -R root.mail /etc/staticroutes
-    echo -e "${GREEN} Done ${STD}"
+    echo -e "${green} Done ${reset}"
 
     echo "Preparing to restore each accounts, please wait..."
     sleep 3
     for i in `ls -l /data | awk '{print $9}' | grep ".tar.gz"`; do
-        echo -e "Begin restore $i...\n"
+        echo -n "Restore - $i "
 		    /scripts/restorepkg --force /data/$i
-        echo -e "[Done]\n"
+        echo -e "- ${green} Done ${reset}"
     done
     rm -rf /data/*
-    echo -e "${GREEN} Done ${STD}"
-
-    duration=$SECONDS
-    echo "Total $size, $(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."
+    echo -e "${green} Done ${reset}"
 }
+###########   >_   #####################################################################
+
+# Check the parameters are passed
+if [ -z "$1" ] || [ -n "$2" ] ;then
+    tput bold
+    tput setaf 1
+    echo "Invalid Option!"
+    helptext
+    exit 1
+fi
+
+# Main function, switches options passed to it
+case "$1" in
+        -h) helptext
+        ;;
+        --help) helptext
+
+        case "$2" in
+                --all) all
+                ;;
+                -a)
+                ;;
+                --swap) swap
+                ;;
+                -s) swap
+                ;;
+                --recovery) recovery
+                ;;
+                -r) recovery
+                ;;
+            *)
+                        tput bold
+                        tput setaf 1
+                        echo "Invalid Option!"
+                        helptext
+                        ;;
+        esac
+                ;;
+                -all) all
+                ;;
+                -a) all
+                ;;
+                --swap) swap
+                ;;
+                -s) swap
+                ;; 
+                --recovery) recovery
+                ;;
+                -r) recovery
+                ;;
+            *)
+                        tput bold
+                        tput setaf 1
+                        echo "Invalid Option!"
+                        helptext
+                        ;;
+esac
+###########   >_   #####################################################################
+res2=$(date +%s.%N)
+dt=$(echo "$res2 - $res1" | bc)
+dd=$(echo "$dt/86400" | bc)
+dt2=$(echo "$dt-86400*$dd" | bc)
+dh=$(echo "$dt2/3600" | bc)
+dt3=$(echo "$dt2-3600*$dh" | bc)
+dm=$(echo "$dt3/60" | bc)
+ds=$(echo "$dt3-60*$dm" | bc)
+echo "============================="
+printf "Total runtime: %d:%02d:%02d:%02.4f\n" $dd $dh $dm $ds
+enddate=$(date +%T\ %d-%m-%Y)
+echo "=    $enddate    ="
+echo "============================="
