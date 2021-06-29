@@ -7,9 +7,9 @@
 - Thay đổi IP (cũ của template) thành IP (mới sẽ sử dụng) trong IP Migration Wizard.
 - Thay đổi Hostname (cũ của template) thành hostname (mới sẽ sử dụng) trong Change Hostname.
 - Cấu hình Backup cấu hình.
-- Kiểm tra route tới zabbix proxy và tới cụm relay.
+- Kiểm tra route ip.
 - Kiểm tra và thêm server mới vào Zabbix Server.
-- Cấu hình filebeat theo thông tin máy chủ mới để đẩy logs qua ELK.
+- Cấu hình filebeat và logstash theo thông tin máy chủ mới để đẩy logs qua ELK.
 
 ## Quy trình kéo disk
 - Nâng thêm Disk cho máy chủ trên PVA.
