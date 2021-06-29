@@ -4,7 +4,7 @@
 - Điều chỉnh thông tin IP LAN.
 - Điều chỉnh IP WAN trong file hosts.
 - Điều chỉ IP trong Basic WebHost Manager:
-- Thay đổi từ IP (cũ của template) thành IP (mới sẽ sử dụng) trong IP Migration Wizard.
+- Thay đổi IP (cũ của template) thành IP (mới sẽ sử dụng) trong IP Migration Wizard.
 - Thay đổi Hostname (cũ của template) thành hostname (mới sẽ sử dụng) trong Change Hostname.
 - Cấu hình Backup cấu hình.
 - Kiểm tra route tới zabbix proxy và tới cụm relay.
